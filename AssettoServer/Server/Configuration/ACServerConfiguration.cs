@@ -326,7 +326,27 @@ public partial class ACServerConfiguration
                 
                 if (File.Exists(configPath) && builder != null)
                 {
-                    var deserializer = new DeserializerBuilder().Build();
+                    // ── KOTT fork patch (2026-05-04) ──────────────────────────────────────
+                    // .IgnoreUnmatchedProperties() demotes "unknown YAML key" from a fatal
+                    // ConfigurationParsingException (caught at line ~349 below) to a silent
+                    // skip. This is required because KOTT's thin-client plugin refactor
+                    // (commit 92cd704, 2026-05-04) deleted ~13 fields from KottConfiguration;
+                    // external operators upgrading the plugin DLL by drop-in replacement
+                    // still have stale keys in their plugin_kott_cfg.yml on first boot, and
+                    // strict deserialization bricked KOTT-central's first newly-provisioned
+                    // server today. The migrate script (scripts/kott-config-migrate.py,
+                    // shipped inside every operator bundle) is the active path that strips
+                    // stale keys; this is the passive safety net for operators who skip it.
+                    //
+                    // Tradeoff: typos in plugin config are silently accepted instead of
+                    // failing fast at boot. Operators who mistype a field name will see
+                    // the field's default value instead of an error. The build-time
+                    // schema (plugin_kott_cfg.schema.json) and the migrate script's diff
+                    // output are the user-facing signal that fields are stale.
+                    // ──────────────────────────────────────────────────────────────────────
+                    var deserializer = new DeserializerBuilder()
+                        .IgnoreUnmatchedProperties()
+                        .Build();
                     using var file = File.OpenText(configPath);
                     var configObj = deserializer.Deserialize(file, plugin.ConfigurationType)!;
 
