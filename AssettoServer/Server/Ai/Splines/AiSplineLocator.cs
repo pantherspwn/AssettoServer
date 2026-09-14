@@ -55,6 +55,20 @@ public class AiSplineLocator
         {
             mapAiBasePath = mapAiLayoutPath;
         }
+
+        // KOTT fork (2026-09-14): the traffic pack lives OUTSIDE the content tree. KOTT delivers a
+        // sprawl track's road network (the AssettoServer traffic pack, fast_lane.aip) into its
+        // kott-splines/ overlay under the reserved __network layout id — the content tree must stay
+        // free of AI files because the player zip is built from it and the CSP client loads any
+        // ai/ it downloads. When that pack exists it IS the traffic spline: without this, a Shutoko
+        // server's AI drove the single content-tree fast_lane.ai (a placeholder straight) and traffic
+        // only ever spawned within a few metres of it.
+        string overlayNetworkPath = Path.Join("kott-splines", "tracks", track, "__network", "ai");
+        if (File.Exists(Path.Join(overlayNetworkPath, "fast_lane.aip")))
+        {
+            Log.Information("Using the KOTT road-network pack as the AI spline: {Path}", Path.GetFullPath(overlayNetworkPath));
+            mapAiBasePath = overlayNetworkPath;
+        }
         
         var cacheKey = GenerateCacheKey(mapAiBasePath);
         Directory.CreateDirectory("cache");
