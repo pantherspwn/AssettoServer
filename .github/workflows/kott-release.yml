@@ -1,0 +1,75 @@
+# KOTT fork release — publishes the linux-x64 self-contained single-file server
+# binary that /opt/assetto/shared/AssettoServer on the KOTT VPS is a copy of.
+#
+# Fires on a push of a KOTT fork tag (v0.0.55-pre35-kott.4, ...) or by hand
+# (Actions → "KOTT fork release" → Run workflow, give the tag to release to).
+# Uploads AssettoServer + its linux-x64 sidecars as assets on a PRE-RELEASE for
+# that tag, creating the release if it does not exist.
+#
+# The upstream workflows in this folder (dotnet.yml, docker.yaml) also trigger
+# on `v*` tags and are left untouched: dotnet.yml adds its multi-RID tarballs to
+# the same release; docker.yaml needs DockerHub secrets this fork does not have
+# and will fail on its own — harmless.
+#
+# Consuming the asset on the VPS (same swap scripts/publish-assettoserver.sh does):
+#   curl -L -o /opt/assetto/shared/AssettoServer.new \
+#     https://github.com/pantherspwn/AssettoServer/releases/download/<tag>/AssettoServer
+#   sha256sum -c AssettoServer.sha256   # asset alongside
+#   chmod 755 ...; chown 1001:1001 ...; mv AssettoServer AssettoServer.prev; mv AssettoServer.new AssettoServer
+name: KOTT fork release
+
+on:
+  push:
+    tags:
+      - 'v*-kott.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish the release on (e.g. v0.0.55-pre35-kott.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-linux-x64:
+    name: Publish linux-x64 single-file
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout ${{ inputs.tag || github.ref_name }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0   # MinVer derives the assembly version from tags
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish (linux-x64, self-contained, single file)
+        run: dotnet publish AssettoServer/AssettoServer.csproj -c Release -r linux-x64 -p:PublishSingleFile=true --self-contained
+
+      - name: Checksums
+        working-directory: out-linux-x64
+        run: |
+          ls -la AssettoServer libsteam_api.so libcsp_xxhash3.so steam_appid.txt
+          sha256sum AssettoServer libsteam_api.so libcsp_xxhash3.so steam_appid.txt | tee AssettoServer.sha256
+
+      - name: Release assets on ${{ env.RELEASE_TAG }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            out-linux-x64/AssettoServer
+            out-linux-x64/libsteam_api.so
+            out-linux-x64/libcsp_xxhash3.so
+            out-linux-x64/steam_appid.txt
+            out-linux-x64/AssettoServer.sha256
