@@ -101,6 +101,8 @@ public class HttpController : ControllerBase
         var cars = new List<EntryListResponseCar>(_entryCarManager.EntryCars.Length);
         foreach (var ec in _entryCarManager.EntryCars)
         {
+            // KOTT fork (2026-09-14): hidden traffic is not a slot Content Manager should list.
+            if (_configuration.Extra.AiParams.HideAiCars && ec.AiMode == AiMode.Fixed) continue;
             cars.Add(new EntryListResponseCar
             {
                 Model = ec.Model,
@@ -130,6 +132,7 @@ public class HttpController : ControllerBase
         var cars = new List<DetailResponseCar>(_entryCarManager.EntryCars.Length);
         foreach (var ec in _entryCarManager.EntryCars)
         {
+            if (_configuration.Extra.AiParams.HideAiCars && ec.AiMode == AiMode.Fixed) continue;   // KOTT fork: hidden traffic is not a slot
             cars.Add(new DetailResponseCar
             {
                 Model = ec.Model,

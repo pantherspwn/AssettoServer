@@ -25,11 +25,14 @@ public class HttpInfoCache : IHostedService
     public IReadOnlyList<string> Country { get; private set; } = null!;
     public Dictionary<string, object> Extensions { get; } = [];
 
+    private readonly bool _hideAiCars;
+
     public HttpInfoCache(ACServerConfiguration configuration, EntryCarManager entryCarManager, GeoParamsManager geoParamsManager)
     {
         _entryCarManager = entryCarManager;
         _geoParamsManager = geoParamsManager;
-        
+        _hideAiCars = configuration.Extra.AiParams.HideAiCars;
+
         Durations = configuration.Sessions.Select(c => c.IsTimedRace ? c.Time * 60 : c.Laps).ToList();
         SessionTypes = configuration.Sessions.Select(s => (int)s.Type).ToList();
         ServerName = configuration.Server.Name + (configuration.Extra.EnableServerDetails ? " ℹ" + configuration.Server.HttpPort : "");
@@ -52,7 +55,12 @@ public class HttpInfoCache : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        Cars = _entryCarManager.EntryCars.Select(c => c.Model).Distinct().ToList();
+        // KOTT fork (2026-09-14): with HideAiCars, fixed traffic slots stay out of the car list
+        // Content Manager's join dialog offers — a traffic-only model is not something to drive.
+        // A model that also has a player slot stays listed.
+        Cars = _entryCarManager.EntryCars
+            .Where(c => !(_hideAiCars && c.AiMode == AiMode.Fixed))
+            .Select(c => c.Model).Distinct().ToList();
         Country = [_geoParamsManager.GeoParams.Country, _geoParamsManager.GeoParams.CountryCode];
         return Task.CompletedTask;
     }
